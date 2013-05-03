@@ -23,6 +23,7 @@ LiquidCrystal lcd0(0);
 LiquidCrystal lcd1(1);
 
 void setup() {
+  Serial.begin(9600);
   // set up the LCD's number of rows and columns: 
   lcd0.begin(20, 4);
   lcd1.begin(20, 4);
@@ -34,12 +35,15 @@ void setup() {
   muxShield.setMode(3,ANALOG_IN);
 }
 
-float thermistorReadingToResistance(int reading) {
-  reading = (1023 / reading)  - 1;
-  return SERIESRESISTOR / reading;
+float thermistorReadingToResistance(float reading) {
+  if (reading) {
+    reading = 1023 / reading  - 1;
+    return (SERIESRESISTOR / reading);
+  }
+  return reading;
 }
 
-float resistanceToC(int reading) {
+float resistanceToC(float reading) {
   // convert the value to resistance
   reading = thermistorReadingToResistance(reading);
   
@@ -55,11 +59,14 @@ float resistanceToC(int reading) {
 }
 
 void readTemperaturesFromMux() {
-  for (int y = 0; y < 3; y++) {
+  for (int y = 1; y <= 1; y++) {
     for (int x = 0; x <= 15; x++) {
-      int reading = muxShield.analogReadMS(y,x);
-      TemperatureReadingsInC[y][x] = resistanceToC(reading);
+      float reading = muxShield.analogReadMS(y,x);
+      Serial.print(reading);
+      Serial.print("  ");
+      TemperatureReadingsInC[(y-1)][x] = resistanceToC(reading);
     }
+    Serial.println("");
   }
 }
 
@@ -69,7 +76,12 @@ void displayTemperaturesOnLCD(LiquidCrystal lcd) {
    for (int x = 0; x <= 15; x++) {
      lcd.setCursor(col, row);
      float reading = TemperatureReadingsInC[0][x]; // first row of MUX only
-     lcd.print(reading, 1);
+     if (reading < 60 && reading > 0) {
+       lcd.print(reading, 1);
+     }
+     else {
+       lcd.print(00.0, 1);
+     }
      
      if (col >= 15) {
        // wrap around to next row
