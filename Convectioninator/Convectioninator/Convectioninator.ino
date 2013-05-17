@@ -5,22 +5,29 @@
 #include <LiquidCrystal.h>
 #include "RTClib.h"
 
+#define DEBUG 1
+
+#define LOOP_DELAY_MS 100
+
 typedef struct {
   int port;
   int pin;
-} MuxMap;
+} 
+MuxMap;
 
 typedef struct {
   int x;
   int y;
   int z;
-} RawAccel;
+} 
+RawAccel;
 
 typedef struct {
   long x;
   long y;
   long z;
-} ConvertedAccel;
+} 
+ConvertedAccel;
 
 // resistance at 25 degrees C
 #define THERMISTORNOMINAL 10000      
@@ -54,101 +61,86 @@ int yRawMax = 512 + _16GUnits;
 int zRawMin = 512 - _16GUnits;
 int zRawMax = 512 + _16GUnits;
 
-int lowG = -1600;
-int highG = 1600;
-// Take multiple samples to reduce noise
-const int sampleSize = 10;
+int lowG = -1600;                    // low value of acceleration reading
+int highG = 1600;                    // high value of acceleration reading
+const int sampleSize = 10;           // number of acceleration samples to read at a time
+RawAccel rawAccel;                   // current acceleration raw values (voltage)
+ConvertedAccel convertedAccel;       // current acceleration converted to Gs
+const int chipSelect = 10;           // for the SD Card shield
+File dataFile;                       // file we write data to
+RTC_DS1307 RTC;                      // define the Real Time Clock object
+DateTime now;                        // current time
+MuxShield muxShield;                 // reference to mux for temp reading
+MuxMap thermoMuxLayout[16];          // array of MuxMap structs (to map thermos to mux port/pin)
+float TemperatureReadingsInC[16];    // array of temperatures read from mux in C
 
-RawAccel rawAccel;
-ConvertedAccel convertedAccel;
+LiquidCrystal lcd0(0);               // setup LCD screen 0
+LiquidCrystal lcd1(1);               // setup LCD screen 1
 
-const int chipSelect = 10;
-File dataFile;
-RTC_DS1307 RTC; // define the Real Time Clock object
-DateTime now;
-MuxShield muxShield;
-MuxMap thermoMuxLayout[16];
-float TemperatureReadingsInC[16];
-
-// Connect via i2c, default address #0 (A0-A2 not jumpered)
-LiquidCrystal lcd0(0);
-LiquidCrystal lcd1(1);
-
-
-void setupMuxLayout() {
-  thermoMuxLayout[0].port = 1;
-  thermoMuxLayout[0].pin = 0;
-  thermoMuxLayout[1].port = 1;
-  thermoMuxLayout[1].pin = 1;
-  thermoMuxLayout[2].port = 1;
-  thermoMuxLayout[2].pin = 2;
-  thermoMuxLayout[3].port = 1;
-  thermoMuxLayout[3].pin = 3;
-  thermoMuxLayout[4].port = 1;
-  thermoMuxLayout[4].pin = 4;
-  
-  thermoMuxLayout[5].port = 2;
-  thermoMuxLayout[5].pin = 0;
-  thermoMuxLayout[6].port = 2;
-  thermoMuxLayout[6].pin = 1;
-  thermoMuxLayout[7].port = 2;
-  thermoMuxLayout[7].pin = 2;
-  thermoMuxLayout[8].port = 2;
-  thermoMuxLayout[8].pin = 3;
-  thermoMuxLayout[9].port = 2;
-  thermoMuxLayout[9].pin = 4;
-  
-  thermoMuxLayout[10].port = 1;
-  thermoMuxLayout[10].pin = 11;
-  thermoMuxLayout[11].port = 1;
-  thermoMuxLayout[11].pin = 12;
-  thermoMuxLayout[12].port = 1;
-  thermoMuxLayout[12].pin = 13;
-  thermoMuxLayout[13].port = 1;
-  thermoMuxLayout[13].pin = 14;
-  thermoMuxLayout[14].port = 1;
-  thermoMuxLayout[14].pin = 15;
-  
-  thermoMuxLayout[15].port = 2;
-  thermoMuxLayout[15].pin = 11;
-  thermoMuxLayout[16].port = 2;
-  thermoMuxLayout[16].pin = 12;
+void mapThermoMuxPortAndPin(int thermoIndex, int muxPort, int muxPin) {
+  thermoMuxLayout[thermoIndex].port = muxPort;
+  thermoMuxLayout[thermoIndex].pin = muxPin;
 }
 
-void setup() {
-  setupMuxLayout();
-  Serial.begin(9600);
+void setupMuxLayout() {
+  mapThermoMuxPortAndPin(0, 1, 0);
+  mapThermoMuxPortAndPin(1, 1, 1);
+  mapThermoMuxPortAndPin(2, 1, 2);
+  mapThermoMuxPortAndPin(3, 1, 3);
+  mapThermoMuxPortAndPin(4, 1, 4);
+
+  mapThermoMuxPortAndPin(5, 2, 0);
+  mapThermoMuxPortAndPin(6, 2, 1);
+  mapThermoMuxPortAndPin(7, 2, 2);
+  mapThermoMuxPortAndPin(8, 2, 3);
+  mapThermoMuxPortAndPin(9, 2, 4);
+
+  mapThermoMuxPortAndPin(10, 1, 11);
+  mapThermoMuxPortAndPin(11, 1, 12);
+  mapThermoMuxPortAndPin(12, 1, 13);
+  mapThermoMuxPortAndPin(13, 1, 14);
+  mapThermoMuxPortAndPin(14, 1, 15);
+
+  mapThermoMuxPortAndPin(15, 2, 11);
+  mapThermoMuxPortAndPin(16, 2, 12);
+}
+
+void setupMux() {
+  muxShield.setMode(1,ANALOG_IN);
+  muxShield.setMode(2,ANALOG_IN);
+  muxShield.setMode(3,ANALOG_IN);
+}
+
+void setupAccelerometer() {
+  analogReference(EXTERNAL);
+  int xRaw = ReadAxis(xInput);
+  int yRaw = ReadAxis(yInput);
+  int zRaw = ReadAxis(zInput);
+  delay(3000);
+  xRaw = ReadAxis(xInput);
+  yRaw = ReadAxis(yInput);
+  zRaw = ReadAxis(zInput);
+
+  Serial.print("Raw values at start: ");
+
+  Serial.print(xRaw);
+  Serial.print(", ");
+  Serial.print(yRaw);
+  Serial.print(", ");
+  Serial.print(zRaw);
+  Serial.println(); 
+}
+
+void setupLCDScreens() {
   // set up the LCD's number of rows and columns: 
   lcd0.begin(20, 4);
   lcd1.begin(20, 4);
 
   lcd0.setBacklight(HIGH);
   lcd1.setBacklight(HIGH);
-  
-  analogReference(EXTERNAL);
-  int xRaw = ReadAxis(xInput);
-  int yRaw = ReadAxis(yInput);
-  int zRaw = ReadAxis(zInput);
-  delay(3000);
-   xRaw = ReadAxis(xInput);
-   yRaw = ReadAxis(yInput);
-   zRaw = ReadAxis(zInput);
-  
-  
-  Serial.print("Raw values at start: ");
+}
 
-    
-    Serial.print(xRaw);
-    Serial.print(", ");
-    Serial.print(yRaw);
-    Serial.print(", ");
-    Serial.print(zRaw);
-    Serial.println(); 
-
-  muxShield.setMode(1,ANALOG_IN);
-  muxShield.setMode(2,ANALOG_IN);
-  muxShield.setMode(3,ANALOG_IN);
-  
+void setupSDCard() {
   Serial.print("Initializing SD card...");
   pinMode(SS, OUTPUT);
   // see if the card is present and can be initialized:
@@ -157,13 +149,19 @@ void setup() {
     // don't do anything more:
     while (1) ;
   }
+#ifdef DEBUG
   Serial.println("card initialized.");
+#endif
+}
 
+void setupClock() {
   if (!RTC.begin()) {
     Serial.println("RTC failed");
   }
-  
+  RTC.adjust(DateTime(__DATE__, __TIME__));
+}
 
+void openDataFile() {
   // Open up the file we're going to log to!
   dataFile = SD.open("datalog.txt", FILE_WRITE);
   if (! dataFile) {
@@ -171,13 +169,25 @@ void setup() {
     // Wait forever since we cant write data
     while (1) ;
   }
-  
-    dataFile.println("Hello world.");
-
-//  RTC.adjust(DateTime(__DATE__, __TIME__));
-    RTC.adjust(DateTime("Dec 26 2009","12:34:56"));
 }
 
+void setup() {
+  Serial.begin(9600);
+
+  setupLCDScreens();
+  setupSDCard();
+  setupMuxLayout();
+  setupMux();  
+  setupAccelerometer();
+
+  openDataFile();
+
+  dataFile.println("Beginning of new data file.");
+}
+
+/////////////////////////////////////////////////////////////
+// Temperature reading
+/////////////////////////////////////////////////////////////
 float thermistorReadingToResistance(float reading) {
   if (reading) {
     reading = 1023 / reading  - 1;
@@ -189,7 +199,7 @@ float thermistorReadingToResistance(float reading) {
 float resistanceToC(float reading) {
   // convert the value to resistance
   reading = thermistorReadingToResistance(reading);
-  
+
   float steinhart;
   steinhart = reading / THERMISTORNOMINAL;     // (R/Ro)
   steinhart = log(steinhart);                  // ln(R/Ro)
@@ -203,52 +213,25 @@ float resistanceToC(float reading) {
 
 void readTemperaturesFromMux() {
   for (int x = 0; x < 16; x++) {
-      MuxMap thermo = thermoMuxLayout[x];
-      Serial.print("port: ");
-      Serial.print(thermo.port);
-      Serial.print(" pin: ");
-      Serial.print(thermo.pin);
-      Serial.println();
-      float reading = muxShield.analogReadMS(thermo.port,thermo.pin);
-      Serial.println(reading);
-      TemperatureReadingsInC[x] = resistanceToC(reading);
+    MuxMap thermo = thermoMuxLayout[x];
+    float reading = muxShield.analogReadMS(thermo.port,thermo.pin);
+    TemperatureReadingsInC[x] = resistanceToC(reading);
+
+#ifdef DEBUG
+    Serial.print("port: ");
+    Serial.print(thermo.port);
+    Serial.print(" pin: ");
+    Serial.print(thermo.pin);
+    Serial.println();
+    Serial.println(reading);
+#endif
   }
 }
 
-void displayTemperaturesOnLCD(LiquidCrystal lcd) {
-  int row = 0;
-  int col = 0;
-   for (int x = 0; x <= 15; x++) {
-     lcd.setCursor(col, row);
-     float reading = TemperatureReadingsInC[x]; // first row of MUX only
-     if (reading < 60 && reading > 0) {
-       lcd.print(reading, 1);
-     }
-     else {
-       lcd.print(00.0, 1);
-     }
-     
-     if (col >= 15) {
-       // wrap around to next row
-       col = 0;
-       row++;
-     }
-     else {
-       // move over 5 spaces for next temp reading
-       col += 5;
-     }
-   }
-}
 
-void displayOtherStuffOnLCD(LiquidCrystal lcd) {
-    lcd.setCursor(0,0);
-    lcd.print("Hello LCD 1 foo");
-  
-}
-
-//
-// Read "sampleSize" samples and report the average
-//
+/////////////////////////////////////////////////////////////
+// Accelerometer reading
+/////////////////////////////////////////////////////////////
 int ReadAxis(int axisPin)
 {
   long reading = 0;
@@ -267,33 +250,67 @@ float convertRawAccel(int accel, int min, int max) {
 }
 
 void readAccel() {
-    int xRaw = ReadAxis(xInput);
-    int yRaw = ReadAxis(yInput);
-    int zRaw = ReadAxis(zInput);
-    
-    rawAccel.x = xRaw;
-    rawAccel.y = yRaw;
-    rawAccel.x = zRaw;
-    
-    convertedAccel.x = convertRawAccel(xRaw, xRawMin, xRawMax);
-    convertedAccel.y = convertRawAccel(yRaw, yRawMin, yRawMax);
-    convertedAccel.z = convertRawAccel(zRaw, zRawMin, zRawMax);
+  int xRaw = ReadAxis(xInput);
+  int yRaw = ReadAxis(yInput);
+  int zRaw = ReadAxis(zInput);
+
+  rawAccel.x = xRaw;
+  rawAccel.y = yRaw;
+  rawAccel.x = zRaw;
+
+  convertedAccel.x = convertRawAccel(xRaw, xRawMin, xRawMax);
+  convertedAccel.y = convertRawAccel(yRaw, yRawMin, yRawMax);
+  convertedAccel.z = convertRawAccel(zRaw, zRawMin, zRawMax);
+}
+
+/////////////////////////////////////////////////////////////
+// Read time from Real Time Clock (RTC)
+/////////////////////////////////////////////////////////////
+void readTime() {
+  now = RTC.now();
+}
+
+/////////////////////////////////////////////////////////////
+// Display values on LCD Screens
+/////////////////////////////////////////////////////////////
+void displayTemperaturesOnLCD(LiquidCrystal lcd) {
+  int row = 0;
+  int col = 0;
+  for (int x = 0; x <= 15; x++) {
+    lcd.setCursor(col, row);
+    float reading = TemperatureReadingsInC[x]; // first row of MUX only
+    if (reading < 60 && reading > 0) {
+      lcd.print(reading, 1);
+    }
+    else {
+      lcd.print(00.0, 1);
+    }
+
+    if (col >= 15) {
+      // wrap around to next row
+      col = 0;
+      row++;
+    }
+    else {
+      // move over 5 spaces for next temp reading
+      col += 5;
+    }
+  }
+}
+
+void displayOtherStuffOnLCD(LiquidCrystal lcd) {
+  lcd.setCursor(0,0);
+  lcd.print("Hello LCD 1 foo");
 }
 
 void loop() {
+  readTime();
   readAccel();
   readTemperaturesFromMux();
-  
-  displayTemperaturesOnLCD(lcd0);
 
+  displayTemperaturesOnLCD(lcd0);
   displayOtherStuffOnLCD(lcd1);
 
-  now = RTC.now();
-  // log time
-  dataFile.println(now.unixtime()); // seconds since 2000
-  dataFile.flush();
-  
-  Serial.println(now.unixtime());
-  delay(100);
+  delay(LOOP_DELAY_MS);
 }
 
