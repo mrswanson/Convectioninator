@@ -13,14 +13,20 @@ const int buttonPin = 2;
 const int _oneGUnits = 19;
 const int _16GUnits = _oneGUnits * 16;
 
-int xRawMin = 512 - _16GUnits;
-int xRawMax = 512 + _16GUnits;
+int defaultCenter = 512;
 
-int yRawMin = 512 - _16GUnits;
-int yRawMax = 512 + _16GUnits;
+int xOrigin = defaultCenter;
+int yOrigin = defaultCenter;
+int zOrigin = defaultCenter;
 
-int zRawMin = 512 - _16GUnits;
-int zRawMax = 512 + _16GUnits;
+int xRawMin = defaultCenter - _16GUnits;
+int xRawMax = defaultCenter + _16GUnits;
+
+int yRawMin = defaultCenter - _16GUnits;
+int yRawMax = defaultCenter + _16GUnits;
+
+int zRawMin = defaultCenter - _16GUnits;
+int zRawMax = defaultCenter + _16GUnits;
 
 int lowG = -1600;
 int highG = 1600;
@@ -32,25 +38,40 @@ const int sampleSize = 10;
 void setup() 
 {
 
+  analogReference(EXTERNAL);
   Serial.begin(9600);
   int xRaw = ReadAxis(xInput);
   int yRaw = ReadAxis(yInput);
   int zRaw = ReadAxis(zInput);
   delay(3000);
-   xRaw = ReadAxis(xInput);
-   yRaw = ReadAxis(yInput);
-   zRaw = ReadAxis(zInput);
-  
+  xRaw = ReadAxis(xInput);
+  yRaw = ReadAxis(yInput);
+  zRaw = ReadAxis(zInput);
   
   Serial.print("Raw values at start: ");
+  Serial.print(xRaw);
+  Serial.print(", ");
+  Serial.print(yRaw);
+  Serial.print(", ");
+  Serial.print(zRaw);
+  Serial.println(); 
+  
 
-    
-    Serial.print(xRaw);
-    Serial.print(", ");
-    Serial.print(yRaw);
-    Serial.print(", ");
-    Serial.print(zRaw);
-    Serial.println(); 
+  
+  xOrigin = xRaw;
+  yOrigin = yRaw;
+  zOrigin = zRaw - _oneGUnits; //starts at 1G so origin is start minus 1G
+  
+  Serial.print("Origin at start: ");
+  Serial.print(xOrigin);
+  Serial.print(", ");
+  Serial.print(yOrigin);
+  Serial.print(", ");
+  Serial.print(zOrigin);
+  Serial.println(); 
+  
+  center();
+  
 }
 
 void loop() 
@@ -88,6 +109,17 @@ void loop()
   
   delay(500);
 //  }
+}
+
+void center() {
+  xRawMin = xOrigin - _16GUnits;
+  xRawMax = xOrigin + _16GUnits;
+  
+  yRawMin = yOrigin - _16GUnits;
+  yRawMax = yOrigin + _16GUnits;
+  
+  zRawMin = zOrigin - _16GUnits;
+  zRawMax = zOrigin + _16GUnits;
 }
 
 //
