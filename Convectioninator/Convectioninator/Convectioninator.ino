@@ -5,7 +5,7 @@
 #include <LiquidCrystal.h>
 #include "RTClib.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define LOOP_DELAY_MS 100
 
@@ -52,14 +52,20 @@ const int zInput = A15;
 const int _oneGUnits = 19;
 const int _16GUnits = _oneGUnits * 16;
 
-int xRawMin = 512 - _16GUnits;
-int xRawMax = 512 + _16GUnits;
+int defaultCenter = 512;
 
-int yRawMin = 512 - _16GUnits;
-int yRawMax = 512 + _16GUnits;
+int xOrigin = defaultCenter;
+int yOrigin = defaultCenter;
+int zOrigin = defaultCenter;
 
-int zRawMin = 512 - _16GUnits;
-int zRawMax = 512 + _16GUnits;
+int xRawMin = defaultCenter - _16GUnits;
+int xRawMax = defaultCenter + _16GUnits;
+
+int yRawMin = defaultCenter - _16GUnits;
+int yRawMax = defaultCenter + _16GUnits;
+
+int zRawMin = defaultCenter - _16GUnits;
+int zRawMax = defaultCenter + _16GUnits;
 
 int lowG = -1600;                    // low value of acceleration reading
 int highG = 1600;                    // high value of acceleration reading
@@ -71,8 +77,8 @@ File dataFile;                       // file we write data to
 RTC_DS1307 RTC;                      // define the Real Time Clock object
 DateTime now;                        // current time
 MuxShield muxShield;                 // reference to mux for temp reading
-MuxMap thermoMuxLayout[16];          // array of MuxMap structs (to map thermos to mux port/pin)
-float TemperatureReadingsInC[16];    // array of temperatures read from mux in C
+MuxMap thermoMuxLayout[20];          // array of MuxMap structs (to map thermos to mux port/pin)
+float TemperatureReadingsInC[20];    // array of temperatures read from mux in C
 
 LiquidCrystal lcd0(0);               // setup LCD screen 0
 LiquidCrystal lcd1(1);               // setup LCD screen 1
@@ -128,7 +134,32 @@ void setupAccelerometer() {
   Serial.print(yRaw);
   Serial.print(", ");
   Serial.print(zRaw);
+  Serial.println();
+  
+  xOrigin = xRaw;
+  yOrigin = yRaw;
+  zOrigin = zRaw - _oneGUnits; //starts at 1G so origin is start minus 1G
+  
+  Serial.print("Origin at start: ");
+  Serial.print(xOrigin);
+  Serial.print(", ");
+  Serial.print(yOrigin);
+  Serial.print(", ");
+  Serial.print(zOrigin);
   Serial.println(); 
+  
+  center();
+}
+
+void center() {
+  xRawMin = xOrigin - _16GUnits;
+  xRawMax = xOrigin + _16GUnits;
+  
+  yRawMin = yOrigin - _16GUnits;
+  yRawMax = yOrigin + _16GUnits;
+  
+  zRawMin = zOrigin - _16GUnits;
+  zRawMax = zOrigin + _16GUnits;
 }
 
 void setupLCDScreens() {
@@ -212,20 +243,35 @@ float resistanceToC(float reading) {
 }
 
 void readTemperaturesFromMux() {
-  for (int x = 0; x < 16; x++) {
+  
+//  for (int port = 1; port <= 3; port++) {
+//    for (int pin = 0; pin < 16; pin++) {
+//      float reading = muxShield.analogReadMS(port, pin);
+//      Serial.print(reading);
+//      Serial.print(" ");
+//    }
+//  }
+//  Serial.println("");
+//  
+//  return;
+  
+  for (int x = 0; x <= 16; x++) {
     MuxMap thermo = thermoMuxLayout[x];
     float reading = muxShield.analogReadMS(thermo.port,thermo.pin);
+    Serial.print(reading);
+    Serial.print(" ");
     TemperatureReadingsInC[x] = resistanceToC(reading);
 
-#ifdef DEBUG
-    Serial.print("port: ");
-    Serial.print(thermo.port);
-    Serial.print(" pin: ");
-    Serial.print(thermo.pin);
-    Serial.println();
-    Serial.println(reading);
-#endif
+//#ifdef DEBUG
+//    Serial.print("port: ");
+//    Serial.print(thermo.port);
+//    Serial.print(" pin: ");
+//    Serial.print(thermo.pin);
+//    Serial.println();
+//    Serial.println(reading);
+//#endif
   }
+  Serial.println("");
 }
 
 
@@ -300,7 +346,24 @@ void displayTemperaturesOnLCD(LiquidCrystal lcd) {
 
 void displayOtherStuffOnLCD(LiquidCrystal lcd) {
   lcd.setCursor(0,0);
-  lcd.print("Hello LCD 1 foo");
+  lcd.print(now.month());
+  lcd.print("/");
+  lcd.setCursor(0,1);
+  lcd.print(TemperatureReadingsInC[16], 1);
+
+  lcd.setCursor(5, 1);
+  lcd.print((float)convertedAccel.x, 1);
+//  lcd.setCursor(10, 1);
+//  lcd.print(convertedAccel.y, 1);
+//  lcd.setCursor(15, 1);
+//  lcd.print(convertedAccel.z, 1);
+
+  lcd.setCursor(0,2);
+  lcd.print(rawAccel.x, 1);
+  lcd.setCursor(5,2);
+  lcd.print(rawAccel.y, 1);
+  lcd.setCursor(10, 2);
+  lcd.print(rawAccel.z, 1);
 }
 
 void loop() {
