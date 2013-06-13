@@ -89,26 +89,26 @@ void mapThermoMuxPortAndPin(int thermoIndex, int muxPort, int muxPin) {
 }
 
 void setupMuxLayout() {
-  mapThermoMuxPortAndPin(0, 1, 0);
-  mapThermoMuxPortAndPin(1, 1, 1);
-  mapThermoMuxPortAndPin(2, 1, 2);
-  mapThermoMuxPortAndPin(3, 1, 3);
-  mapThermoMuxPortAndPin(4, 1, 4);
+  mapThermoMuxPortAndPin(0, 1, 0); // 1
+  mapThermoMuxPortAndPin(1, 2, 0); // 2
+  mapThermoMuxPortAndPin(2, 1, 1); // 3
+  mapThermoMuxPortAndPin(3, 2, 1); // 4
+  mapThermoMuxPortAndPin(4, 1, 2); // 5
 
-  mapThermoMuxPortAndPin(5, 2, 0);
-  mapThermoMuxPortAndPin(6, 2, 1);
-  mapThermoMuxPortAndPin(7, 2, 2);
-  mapThermoMuxPortAndPin(8, 2, 3);
-  mapThermoMuxPortAndPin(9, 2, 4);
+  mapThermoMuxPortAndPin(5, 2, 2); // 6
+  mapThermoMuxPortAndPin(6, 1, 3); // 7
+  mapThermoMuxPortAndPin(7, 2, 3); // 8 
+  mapThermoMuxPortAndPin(8, 1, 4); // 9
+  mapThermoMuxPortAndPin(9, 2, 4); //10
 
-  mapThermoMuxPortAndPin(10, 1, 11);
-  mapThermoMuxPortAndPin(11, 1, 12);
-  mapThermoMuxPortAndPin(12, 1, 13);
-  mapThermoMuxPortAndPin(13, 1, 14);
-  mapThermoMuxPortAndPin(14, 1, 15);
+  mapThermoMuxPortAndPin(10, 1, 11); // 11
+  mapThermoMuxPortAndPin(11, 2, 11); // 12
+  mapThermoMuxPortAndPin(12, 1, 12); // 13
+  mapThermoMuxPortAndPin(13, 2, 12); // 14
+  mapThermoMuxPortAndPin(14, 1, 13); // 15
 
-  mapThermoMuxPortAndPin(15, 2, 11);
-  mapThermoMuxPortAndPin(16, 2, 12);
+  mapThermoMuxPortAndPin(15, 2, 13); // 16
+  mapThermoMuxPortAndPin(16, 1, 14); // 17 (ambient)
 }
 
 void setupMux() {
@@ -206,12 +206,12 @@ void setup() {
   Serial.begin(9600);
 
   setupLCDScreens();
-  setupSDCard();
+  //setupSDCard();
   setupMuxLayout();
   setupMux();  
   setupAccelerometer();
 
-  openDataFile();
+//  openDataFile();
 
   dataFile.println("Beginning of new data file.");
 }
@@ -302,7 +302,7 @@ void readAccel() {
 
   rawAccel.x = xRaw;
   rawAccel.y = yRaw;
-  rawAccel.x = zRaw;
+  rawAccel.z = zRaw;
 
   convertedAccel.x = convertRawAccel(xRaw, xRawMin, xRawMax);
   convertedAccel.y = convertRawAccel(yRaw, yRawMin, yRawMax);
